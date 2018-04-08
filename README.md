@@ -1,5 +1,5 @@
 # ESPRoomba
-Inspired by [cybrox's implementation](https://github.com/cybrox/wroomba) using ESP32 as a Roomba controller. Instead of using ESP32 as a dedicated webserver, the ESP32 is made into a CoAP server that any CoAP client can subscribe to (one possibility is to use a nodeJS server as a [CoAP client](https://github.com/mcollina/node-coap). 
+Inspired by [cybrox's implementation](https://github.com/cybrox/wroomba) using ESP32 as a Roomba controller. Instead of using ESP32 as a dedicated webserver, the ESP32 is made into a CoAP server that any CoAP client can subscribe to (one possibility is to use a nodeJS server as a [CoAP client](https://github.com/mcollina/node-coap)). 
 
 ## Hardware
 1. [ESP32 DevKitC](https://dl.espressif.com/doc/esp-idf/latest/get-started/get-started-devkitc.html)
@@ -14,7 +14,7 @@ Inspired by [cybrox's implementation](https://github.com/cybrox/wroomba) using E
 - A simple voltage divider can also be used to bring down the UART RX to less than 5V (ESP32 is not 5V tolerant) but a level converter is used instead.
 - IO16 and IO17 are used as UART RX and TX respectively. IO18 is used to pulse the BRC pin low (not fully tested if working).
 - IO16 is connected to Roomba TXD pin (through level converter) and IO17 to Roomba RXD.
-- The 5V and 3.3V pins are used as reference voltages for the high and low side of the level converter.
+- The 5V and 3.3V pins are used as reference voltages for the high and low sides of the level converter.
 
 ## CoAP Endpoints
 1. /sc -> for simple commands
