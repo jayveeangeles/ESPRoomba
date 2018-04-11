@@ -43,6 +43,7 @@
 #define SENSORS_OP							142
 #define SEEK_DOCK_OP						143
 #define DRIVE_DIRECT_OP					145
+#define DRIVE_PWM_OP						146
 #define STREAM_OP								148
 #define PAUSE_RESUME_STREAM_OP	150
 #define SCHEDULING_LED_OP				162

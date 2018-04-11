@@ -2,20 +2,21 @@
 
 static const char *TAG = "CoAP_server";
 
-static const char safeOp[] = { SAFE_OP };
-static const char fullOp[] = { FULL_OP };
-static const char spotOp[] = { SPOT_OP };
-static const char cleanOp[] = { CLEAN_OP };
-static const char maxOp[] = { MAX_OP };
-static const char seekDockOp[] = { SEEK_DOCK_OP };
+// static const char safeOp[] = { SAFE_OP };
+// static const char fullOp[] = { FULL_OP };
+// static const char spotOp[] = { SPOT_OP };
+// static const char cleanOp[] = { CLEAN_OP };
+// static const char maxOp[] = { MAX_OP };
+// static const char seekDockOp[] = { SEEK_DOCK_OP };
 
 struct coap_resource_t *globalResource = NULL;
 PRIVILEGED_DATA portMUX_TYPE xTaskQueueMutex = portMUX_INITIALIZER_UNLOCKED;
 
-int coap_get_value(	const unsigned char *s, 
-								    size_t length, 
-								    unsigned char **name,
-								    unsigned char **val) {
+int str_splitter(       const unsigned char *s,
+                                                            size_t length,
+                                                            unsigned char **name,
+                                                            unsigned char **val,
+                  unsigned char token) {
 
   size_t counter = 0;
   const unsigned char *p;
@@ -23,7 +24,7 @@ int coap_get_value(	const unsigned char *s,
   p = s;
 
   while (counter < length) {
-    if (*p == '=') {
+    if (*p == token) {
       *name = (unsigned char* )pvPortMalloc(counter + 1);
       memset(*name, '\0', counter + 1);
       memcpy(*name, s, counter);
@@ -183,7 +184,7 @@ get_simple_cmd_handler(coap_context_t *ctx,
   while ((q = coap_option_next(&opt_iter)) != NULL) {
     unsigned char *value = coap_opt_value(q);
     size_t size = coap_opt_length(q);
-    coap_get_value(value, size, &name, &val);
+    str_splitter(value, size, &name, &val, '=');
   }
 
 	char *pxMessage = (char* )pvPortMalloc(20);
@@ -191,19 +192,21 @@ get_simple_cmd_handler(coap_context_t *ctx,
 
   if ( memcmp(name, "mode", 4) == 0 ) {
   	if ( memcmp(val, "safe", 4) == 0 ) {
-  		memcpy(pxMessage, safeOp, 1);
+  		pxMessage[0] = SAFE_OP;
   	} else if ( memcmp(val, "full", 4) == 0 ) {
-  		memcpy(pxMessage, fullOp, 1);
-  	}
+  		pxMessage[0] = FULL_OP;
+  	} else if ( memcmp(val, "start", 4) == 0 ) {
+      pxMessage[0] = START_OP;
+    }
   } else if ( memcmp(name, "clean", 5) == 0 ) {
   	if ( memcmp(val, "spot", 4) == 0 ) {
-  		memcpy(pxMessage, spotOp, 1);
+  		pxMessage[0] = SPOT_OP;
   	} else if ( memcmp(val, "clean", 5) == 0 ) {
-  		memcpy(pxMessage, cleanOp, 1);
+  		pxMessage[0] = CLEAN_OP;
   	} else if ( memcmp(val, "max", 3) == 0 ) { 
-  		memcpy(pxMessage, maxOp, 1);
+  		pxMessage[0] = MAX_OP;
   	} else if ( memcmp(val, "dock", 4) == 0 ) { 
-  		memcpy(pxMessage, seekDockOp, 1);
+  		pxMessage[0] = SEEK_DOCK_OP;
   	}
   }
 
@@ -216,6 +219,61 @@ get_simple_cmd_handler(coap_context_t *ctx,
   vPortFree(pxMessage);
 
   coap_add_data(response, 4, (const unsigned char*)"done");
+};
+
+/*
+ * Drive Roomba
+ */
+static void
+get_drive_handler(coap_context_t *ctx,
+                  struct coap_resource_t *resource,
+                  const coap_endpoint_t *local_interface,
+                  coap_address_t *peer,
+                  coap_pdu_t *request,
+                  str *token,
+                  coap_pdu_t *response) {
+  (void)request;
+  unsigned char buf[40];
+  response->hdr->code = COAP_RESPONSE_CODE(205);
+
+  unsigned char *left = NULL;
+  unsigned char *right = NULL;
+
+  str_splitter(request->data, strlen((const char*)request->data), &left, &right, ',');
+
+  char *ptrLeft;
+  char *ptrRight;
+  uint16_t leftSpeed = (uint16_t) strtol((const char*)left, &ptrLeft, 10);
+  uint16_t rightSpeed = (uint16_t) strtol((const char*)right, &ptrRight, 10);
+  uint16_t hiRight = (rightSpeed & 0xFF00) >> 8;
+  uint16_t loRight = (rightSpeed & 0xFF);
+  uint16_t hiLeft = (leftSpeed & 0xFF00) >> 8;
+  uint16_t loLeft = (leftSpeed & 0xFF);
+
+  char *pxMessage = (char* )pvPortMalloc(20);
+  memset(pxMessage, 0, 20);
+
+  pxMessage[0] = DRIVE_PWM_OP;
+  pxMessage[1] = hiRight;
+  pxMessage[2] = loRight;
+  pxMessage[3] = hiLeft;
+  pxMessage[4] = loLeft;
+
+  xQueueSend( xCommandsQueue, ( void * ) pxMessage, pdMS_TO_TICKS(1000) );
+
+  coap_add_option(response,
+                  COAP_OPTION_CONTENT_FORMAT,
+                  coap_encode_var_bytes(buf, COAP_MEDIATYPE_TEXT_PLAIN), buf);
+
+  coap_add_option(response,
+                  COAP_OPTION_MAXAGE,
+                  coap_encode_var_bytes(buf, 0x01), buf);
+
+  coap_add_data(response, 4, (const unsigned char*)"done");
+
+  vPortFree(left);
+  vPortFree(right);
+  vPortFree(pxMessage);
 };
 
 /*
@@ -272,6 +330,12 @@ static void resourceInit(coap_context_t* ctx) {
   coap_register_handler(r, COAP_REQUEST_GET, get_sked_handler);
   coap_add_attr(r, (unsigned char *)"ct", 2, (unsigned char *)"0", 1, 0);
   coap_add_attr(r, (unsigned char *)"title", 5, (unsigned char *)"\"Cleaning Schedule Handler\"", 25, 0);
+  coap_add_resource(ctx, r);
+
+  r = coap_resource_init((unsigned char *)"drive", 5, COAP_RESOURCE_FLAGS_NOTIFY_CON);
+  coap_register_handler(r, COAP_REQUEST_GET, get_drive_handler);
+  coap_add_attr(r, (unsigned char *)"ct", 2, (unsigned char *)"0", 1, 0);
+  coap_add_attr(r, (unsigned char *)"title", 5, (unsigned char *)"\"Drive Handler\"", 13, 0);
   coap_add_resource(ctx, r);
 
   r = coap_resource_init((unsigned char *)"obs", 3, COAP_RESOURCE_FLAGS_NOTIFY_CON);

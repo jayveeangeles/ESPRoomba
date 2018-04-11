@@ -203,6 +203,8 @@ void vUartHandle(void *p) {
   /* put roomba in safe mode */
   uart_write_bytes(UART_NUM_2, startOp, 1);
 
+  vTaskDelay(pdMS_TO_TICKS(30));
+
   /* ask roomba to start streaming */
   uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
 
