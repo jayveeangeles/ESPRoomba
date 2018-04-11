@@ -18,6 +18,7 @@ Inspired by [cybrox's implementation](https://github.com/cybrox/wroomba) using E
 
 ## CoAP Endpoints
 1. /sc -> for simple commands
+   * /sc?mode=start -> put into passive mode
    * /sc?mode=safe -> safe mode
    * /sc?mode=full -> full mode
    * /sc?clean=clean -> send clean opcode
@@ -39,6 +40,7 @@ Inspired by [cybrox's implementation](https://github.com/cybrox/wroomba) using E
     }
     ```
 3. /obs -> subscribe to Roomba sensors, data is sent every 15ms.
+4. /drive -> to drive left and right wheels using PWM which are sent as payload with the format ``` ${int leftSpeed},${int rightSpeed} ```
 
 ## To Do's
 * Make commands handling simpler
