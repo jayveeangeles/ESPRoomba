@@ -11,9 +11,10 @@ static const char startOp[1] = { START_OP };
 static const char stopOp[1] = { STOP_OP };
 static const char safeOp[1] = { SAFE_OP };
 static const char resetOp[1] = { RESET_OP };
+static const char pauseStream[2] = { 150,  };
 static const char streamOp[] = { 
-  STREAM_OP,  
-  // QUERY_LIST_OP,
+  // STREAM_OP,  
+  QUERY_LIST_OP,
   11, // number of data packets
   8,  // wall
   14, // wheels overcurrent
@@ -43,7 +44,7 @@ static BaseType_t _uartInit() {
   };
   uart_param_config(UART_NUM_2, &uart_config);
   uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-  return uart_driver_install(UART_NUM_2, RD_BUF_SIZE * 4, 0, 20, &xRSensorsQueue, 0);
+  return uart_driver_install(UART_NUM_2, RD_BUF_SIZE * 4, RD_BUF_SIZE * 4, 20, &xRSensorsQueue, 0);
 };
 
 static void _initSNTP(void) {
@@ -98,12 +99,12 @@ void vDisplayBattPercentage(void *p) {
   
   while (batteryCapacity == 0) {
     vTaskDelay(pdMS_TO_TICKS(100));
-    batteryCapacity = ((uint8_t)sensorData[24] & 0xFF) | ((uint8_t)sensorData[23] << 8);
+    batteryCapacity = ((uint8_t)sensorData[13] & 0xFF) | ((uint8_t)sensorData[12] << 8);
   }
 
   for(;;) {
-    if (sensorData[28] > 1) {
-      batteryCharge = (((uint8_t)sensorData[21] & 0xFF) | ((uint8_t)sensorData[20] << 8)) * 100;
+    if (sensorData[15] > 1) {
+      batteryCharge = (((uint8_t)sensorData[11] & 0xFF) | ((uint8_t)sensorData[10] << 8)) * 100;
       quotient = batteryCharge / batteryCapacity;
 
       if (quotient == 100) {
@@ -128,21 +129,21 @@ void vReadRoomba(void *p) {
   uart_event_t event;
   size_t buffered_size;
   TickType_t xLastWakeTime;
-  const TickType_t xFrequency = pdMS_TO_TICKS(30);\
+  const TickType_t xFrequency = pdMS_TO_TICKS(1000);
   sensorData = (char *) pvPortMalloc(RD_BUF_SIZE);
   memset( sensorData, 0, RD_BUF_SIZE );
 
   for(;;) {
-    // uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
+    uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
 	  //Waiting for UART event.
 	  if(xQueueReceive( xRSensorsQueue, (void * )&event, pdMS_TO_TICKS(15))) {
       // ESP_LOGI(EVENT_TAG, "uart[%d] event:", UART_NUM_2);
       switch(event.type) {
         case UART_DATA:
           // uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
-          // ESP_LOGI(EVENT_TAG, "data, len: %d; buffered len: %d", event.size, buffered_size);
+          ESP_LOGI(EVENT_TAG, "data, len: %d;", event.size);
           uart_read_bytes(UART_NUM_2, (unsigned char*) sensorData, event.size, pdMS_TO_TICKS(15));
-          ESP_LOGI(RX_TAG, "[UART DATA]: %d opcode", sensorData[0]);
+          // ESP_LOGI(RX_TAG, "[UART DATA]: %d opcode", sensorData[0]);
 
           vTaskEnterCritical(&xTaskQueueMutex);
           globalResource->dirty = pdTRUE;
@@ -172,7 +173,7 @@ void vReadRoomba(void *p) {
           break;
       }
     }
-    // vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
 
   free(sensorData);
@@ -211,8 +212,8 @@ void vUartHandle(void *p) {
   vTaskDelay(pdMS_TO_TICKS(30));
 
   /* ask roomba to start streaming */
-  uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
-  vTaskDelay(pdMS_TO_TICKS(30));
+  // uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
+  // vTaskDelay(pdMS_TO_TICKS(30));
 
   _obtainTime();
 
