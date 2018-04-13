@@ -3,6 +3,7 @@
 static const char *UART_TAG = "UART_handler";
 static const char *TX_TAG = "UART_TX";
 static const char *RX_TAG = "UART_RX";
+static const char *EVENT_TAG = "UART_EVENT";
 
 // static PRIVILEGED_DATA portMUX_TYPE xTaskQueueMutex = portMUX_INITIALIZER_UNLOCKED;
 
@@ -12,6 +13,7 @@ static const char safeOp[1] = { SAFE_OP };
 static const char resetOp[1] = { RESET_OP };
 static const char streamOp[] = { 
   STREAM_OP,  
+  // QUERY_LIST_OP,
   11, // number of data packets
   8,  // wall
   14, // wheels overcurrent
@@ -41,7 +43,7 @@ static BaseType_t _uartInit() {
   };
   uart_param_config(UART_NUM_2, &uart_config);
   uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-  return uart_driver_install(UART_NUM_2, RD_BUF_SIZE, 0, 5, &xRSensorsQueue, 0);
+  return uart_driver_install(UART_NUM_2, RD_BUF_SIZE * 4, 0, 20, &xRSensorsQueue, 0);
 };
 
 static void _initSNTP(void) {
@@ -116,7 +118,7 @@ void vDisplayBattPercentage(void *p) {
       uart_write_bytes(UART_NUM_2, (const char *)battPercentageOp, sizeof(battPercentageOp));
     }
 
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(20000));
   }
 
   vTaskDelete(NULL);
@@ -124,53 +126,53 @@ void vDisplayBattPercentage(void *p) {
 
 void vReadRoomba(void *p) {
   uart_event_t event;
+  size_t buffered_size;
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = pdMS_TO_TICKS(30);\
   sensorData = (char *) pvPortMalloc(RD_BUF_SIZE);
   memset( sensorData, 0, RD_BUF_SIZE );
 
   for(;;) {
+    // uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
 	  //Waiting for UART event.
-	  if(xQueueReceive( xRSensorsQueue, (void * )&event, pdMS_TO_TICKS(15)) ) {
-      ESP_LOGI(RX_TAG, "uart[%d] event:", UART_NUM_2);
+	  if(xQueueReceive( xRSensorsQueue, (void * )&event, pdMS_TO_TICKS(15))) {
+      // ESP_LOGI(EVENT_TAG, "uart[%d] event:", UART_NUM_2);
       switch(event.type) {
         case UART_DATA:
-          ESP_LOGI(RX_TAG, "[UART DATA]: %d bytes", event.size);
-
-          vTaskEnterCritical(&xTaskQueueMutex);
-          memset( sensorData, 0, RD_BUF_SIZE );
-          vTaskExitCritical(&xTaskQueueMutex);
-
-          uart_read_bytes(UART_NUM_2, (unsigned char*) sensorData, event.size, portMAX_DELAY);
+          // uart_get_buffered_data_len(UART_NUM_2, &buffered_size);
+          // ESP_LOGI(EVENT_TAG, "data, len: %d; buffered len: %d", event.size, buffered_size);
+          uart_read_bytes(UART_NUM_2, (unsigned char*) sensorData, event.size, pdMS_TO_TICKS(15));
           ESP_LOGI(RX_TAG, "[UART DATA]: %d opcode", sensorData[0]);
 
           vTaskEnterCritical(&xTaskQueueMutex);
           globalResource->dirty = pdTRUE;
           vTaskExitCritical(&xTaskQueueMutex);
-
           break;
         case UART_FIFO_OVF:
-          ESP_LOGI(RX_TAG, "hw fifo overflow");
+          ESP_LOGI(EVENT_TAG, "hw fifo overflow");
           uart_flush_input(UART_NUM_2);
           xQueueReset(xRSensorsQueue);
           break;
         case UART_BUFFER_FULL:
-          ESP_LOGI(RX_TAG, "ring buffer full");
+          ESP_LOGI(EVENT_TAG, "ring buffer full");
           uart_flush_input(UART_NUM_2);
           xQueueReset(xRSensorsQueue);
           break;
         case UART_BREAK:
-          ESP_LOGI(RX_TAG, "uart rx break");
+          ESP_LOGI(EVENT_TAG, "uart rx break");
           break;
         case UART_PARITY_ERR:
-          ESP_LOGI(RX_TAG, "uart parity error");
+          ESP_LOGI(EVENT_TAG, "uart parity error");
           break;
         case UART_FRAME_ERR:
-          ESP_LOGI(RX_TAG, "uart frame error");
+          ESP_LOGI(EVENT_TAG, "uart frame error");
           break;
         default:
-          ESP_LOGI(RX_TAG, "uart event type: %d", event.type);
+          ESP_LOGI(EVENT_TAG, "uart event type: %d", event.type);
           break;
       }
     }
+    // vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
 
   free(sensorData);
@@ -200,18 +202,22 @@ void vUartHandle(void *p) {
     return;
   }
 
-  /* put roomba in safe mode */
-  uart_write_bytes(UART_NUM_2, startOp, 1);
+  /* exit from OI mode */
+  uart_write_bytes(UART_NUM_2, stopOp, 1);
+  vTaskDelay(pdMS_TO_TICKS(30));
 
+  /* put roomba in OI mode */
+  uart_write_bytes(UART_NUM_2, startOp, 1);
   vTaskDelay(pdMS_TO_TICKS(30));
 
   /* ask roomba to start streaming */
   uart_write_bytes(UART_NUM_2, streamOp, sizeof(streamOp));
+  vTaskDelay(pdMS_TO_TICKS(30));
+
+  _obtainTime();
 
   xTaskCreatePinnedToCore(vReadRoomba, "read_roomb", 1024*4, NULL, configMAX_PRIORITIES, &xRoombaReadTask, 1);
   xTaskCreatePinnedToCore(vDisplayBattPercentage, "display_batt", 1024*2, NULL, tskIDLE_PRIORITY, NULL, 0);
-
-  _obtainTime();
 
 	char *pxMessage = (char* )pvPortMalloc(20);
 	const size_t len = 20;

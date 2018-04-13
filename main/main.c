@@ -84,7 +84,7 @@ void app_main(void) {
   }
 
   xTaskCreatePinnedToCore(vPulseRoomb, "pulse_room", 1024*2, NULL, tskIDLE_PRIORITY, &xGPIOPulseRoomb, 1);
-  xTaskCreatePinnedToCore(vCoapServer, "start_coap", 1024*4, NULL, configMAX_PRIORITIES - 1, &xCoapServerTask, 0);
+  xTaskCreatePinnedToCore(vCoapServer, "start_coap", 1024*4, NULL, configMAX_PRIORITIES - 10, &xCoapServerTask, 0);
   xTaskCreatePinnedToCore(vUartHandle, "start_uart", 1024*4, NULL, configMAX_PRIORITIES - 10, &xUartHandleTask, 1);
 }
 

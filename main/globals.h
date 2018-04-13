@@ -26,7 +26,7 @@
 #define WIFI_SSID           CONFIG_WIFI_SSID
 #define WIFI_PASS          	CONFIG_WIFI_PASSWORD
 
-#define RD_BUF_SIZE 				(256)
+#define RD_BUF_SIZE 				(64)
 
 #define CONNECTED_INTERNET 	BIT0
 #define NOT_CONNECTED_INET 	BIT1
@@ -45,6 +45,7 @@
 #define DRIVE_DIRECT_OP					145
 #define DRIVE_PWM_OP						146
 #define STREAM_OP								148
+#define QUERY_LIST_OP						149
 #define PAUSE_RESUME_STREAM_OP	150
 #define SCHEDULING_LED_OP				162
 #define DIGITAL_LEDS_ASCII_OP		164
