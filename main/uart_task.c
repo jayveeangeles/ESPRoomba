@@ -129,7 +129,7 @@ void vReadRoomba(void *p) {
   uart_event_t event;
   size_t buffered_size;
   TickType_t xLastWakeTime;
-  const TickType_t xFrequency = pdMS_TO_TICKS(1000);
+  const TickType_t xFrequency = pdMS_TO_TICKS(100);
   sensorData = (char *) pvPortMalloc(RD_BUF_SIZE);
   memset( sensorData, 0, RD_BUF_SIZE );
 
